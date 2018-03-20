@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport"
+          content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+    <title>Chat</title>
+    <link href="https://cdn.bootcss.com/normalize/8.0.0/normalize.css" rel="stylesheet"/>
+    <style type="text/css">
+        body {
+            background: #EEEEEE;
+        }
+
+        .board {
+            background: #EEEEEE;
+            width: 100%;
+            flex-grow: 1;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: flex-start;
+            overflow-x: hidden;
+            overflow-y: scroll;
+            margin-bottom: 25px;
+        }
+
+        .message {
+            background: #EEEEEE;
+            display: flex;
+            flex-direction: row;
+            justify-content: flex-start;
+            align-items: flex-start;
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .mine {
+            justify-content: flex-end;
+        }
+
+        .head {
+            width: 2rem;
+            height: 2rem;
+            flex: 0 0 auto;
+            border-radius: 5px;
+            box-shadow: 5px 5px 5px #888888;
+            margin: 0 5px;
+        }
+
+        .content {
+            border: #888888 1px solid;
+            background: white;
+            padding: 2px 2px;
+            margin: 0 5px;
+            border-radius: 5px;
+            box-shadow: 5px 5px 5px #888888;
+            word-break: break-all;
+            word-wrap: break-word;
+            max-width: 15rem;
+        }
+
+        .bg-green {
+            background: lawngreen;
+        }
+
+        .edit {
+            position: fixed;
+            bottom: 0;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-around;
+            align-items: center;
+            width: 100%;
+        }
+
+        input {
+            flex-grow: 1;
+        }
+
+        .send {
+            flex-grow: 0;
+        }
+
+        .user {
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+<div class="board">
+</div>
+<div class="edit">
+    <input id="message" type="text" placeholder="Enter the message."/>
+    <button class="send">发送</button>
+</div>
+<script type="text/javascript" th:inline="javascript">
+    var user = [[${user}]];
+    var head = [[${head}]];
+</script>
+<script type="text/javascript" src="/protobuf.js"></script>
+<script type="text/javascript">
+    // websocket
+    var ws = (function () {
+        // 连接服务器
+        var ws = new WebSocket("ws://localhost:8080/message");
+        ws.binaryType = 'arraybuffer';
+
+        //连接发生错误的回调方法
+        ws.onerror = function (event) {
+            console.log(event);
+        };
+
+        //连接成功建立的回调方法
+        ws.onopen = function (event) {
+            console.log(event);
+        };
+
+        //接收到消息的回调方法
+        ws.onmessage = function (event) {
+
+            protobuf.load("/proto/core.proto", function (err, root) {
+                var chat = root.lookupType("protocol.ChatResponse");
+                var object = chat.toObject(chat.decode(new Uint8Array(event.data)), {
+                    from: String,
+                    mine: Boolean,
+                    content: String,
+                    icon: String
+                });
+
+                // 打印到屏幕上
+                // TODO 使用模板引擎
+                var message = document.createElement("div");
+
+                var content = document.createTextNode(object.content);
+
+                var icon = document.createElement("img");
+                icon.setAttribute("src", "/head/" + object.icon);
+                icon.setAttribute("class", "head");
+
+                var node = document.createElement("div");
+                if (object.mine) {
+                    node.setAttribute("class", "content bg-green");
+                    node.appendChild(content);
+                    message.setAttribute("class", "message mine");
+                    message.appendChild(node);
+                    message.appendChild(icon);
+                } else {
+                    node.setAttribute("class", "content");
+                    node.appendChild(content);
+                    message.setAttribute("class", "message");
+                    message.appendChild(icon);
+                    message.appendChild(node);
+                }
+
+                var board = document.querySelector(".board");
+                board.appendChild(message);
+            });
+        };
+
+        //连接关闭的回调方法
+        ws.onclose = function (event) {
+            console.log(event);
+        };
+
+        //监听窗口关闭事件，当窗口关闭时，主动去关闭websocket连接，防止连接还没断开就关闭窗口，server端会抛异常。
+        window.onbeforeunload = function () {
+            ws.close();
+        };
+
+        return ws;
+    })();
+</script>
+<script type="text/javascript">
+    document.querySelector(".send").addEventListener("click", function (event) {
+        event.stopPropagation();
+
+        var input = document.querySelector("#message")
+
+        var message = input.value;
+        input.value = "";
+        input.focus();
+
+        // 发送到服务器
+        if (message) {
+            // 序列化后发送
+            protobuf.load("/proto/core.proto", function (err, root) {
+                if (err)
+                    throw err;
+
+                var chat = root.lookupType("protocol.ChatRequest");
+                var payload = {from: user, to: "*", content: message, icon: head};
+
+                var errMsg = chat.verify(payload);
+                if (errMsg)
+                    throw Error(errMsg);
+
+                var buffer = chat.encode(chat.create(payload)).finish();
+
+                ws.send(buffer);
+            });
+        }
+    });
+</script>
+</body>
+</html>

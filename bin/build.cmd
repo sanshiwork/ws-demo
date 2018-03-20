@@ -1,0 +1,1 @@
+protoc --java_out=../src/main/java -I ../src/main/resources/static/proto core.proto

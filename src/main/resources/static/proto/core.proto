@@ -1,0 +1,17 @@
+syntax = "proto3";
+package protocol;
+option java_package = "com.changyou.fusion.protocol";
+
+message ChatRequest {
+    string from = 1;
+    string to = 2;
+    string content = 3;
+    string icon = 4;
+}
+
+message ChatResponse {
+    string from = 1;
+    bool mine = 2;
+    string content = 3;
+    string icon = 4;
+}
